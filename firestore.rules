@@ -1,0 +1,86 @@
+rules_version = '2';
+
+// Deploy with:  firebase deploy --only firestore:rules
+// (or paste into Firebase console > Firestore Database > Rules > Publish)
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+
+    // Private per-user settings (theme)
+    match /users/{userId} {
+      allow read, write: if signedIn() && request.auth.uid == userId;
+    }
+
+    // Checklists. Everyone in `members` can see and work the list in real time.
+    // Only the owner can manage membership and share codes.
+    match /checklists/{checklistId} {
+      function isMember() { return signedIn() && request.auth.uid in resource.data.members; }
+      function isOwner() { return signedIn() && resource.data.ownerId == request.auth.uid; }
+      function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+
+      allow read: if isMember();
+
+      allow create: if signedIn()
+                    && request.resource.data.ownerId == request.auth.uid
+                    && request.resource.data.members == [request.auth.uid]
+                    && isValidChecklist(request.resource.data);
+
+      allow update: if isValidChecklist(request.resource.data) && (
+        // Owner: anything, but can't give the list away or remove themselves
+        (isOwner()
+          && request.resource.data.ownerId == resource.data.ownerId
+          && request.auth.uid in request.resource.data.members)
+
+        // Collaborator: items, checks, versions, title – not membership or share codes
+        || (isMember()
+          && !changed().hasAny(['ownerId', 'members', 'memberNames', 'liveCode', 'copyCode', 'joinCode']))
+
+        // Collaborator leaving the list (removes only themselves)
+        || (isMember() && !isOwner()
+          && changed().hasOnly(['members', 'memberNames', 'updatedAt'])
+          && request.resource.data.members == resource.data.members.removeAll([request.auth.uid]))
+
+        // Joining with the list's current live share code (adds only themselves)
+        || (signedIn()
+          && !(request.auth.uid in resource.data.members)
+          && resource.data.liveCode is string
+          && request.resource.data.joinCode == resource.data.liveCode
+          && changed().hasOnly(['members', 'memberNames', 'joinCode'])
+          && request.resource.data.members == resource.data.members.concat([request.auth.uid]))
+      );
+
+      allow delete: if isOwner();
+    }
+
+    function isValidChecklist(d) {
+      return d.title is string && d.title.size() > 0 && d.title.size() <= 120
+          && d.items is list && d.items.size() <= 500
+          && d.variants is list && d.variants.size() >= 1 && d.variants.size() <= 12
+          && d.members is list && d.members.size() <= 50
+          && d.checked is map
+          && !('email' in d);
+    }
+
+    // Share codes. Anyone signed in can look up a code they know (get), nobody can
+    // list them. Only the checklist's owner can create, update or turn off a code.
+    match /shareCodes/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+
+      allow create: if signedIn()
+                    && request.resource.data.ownerId == request.auth.uid
+                    && request.resource.data.mode in ['live', 'copy']
+                    && get(/databases/$(database)/documents/checklists/$(request.resource.data.checklistId)).data.ownerId == request.auth.uid;
+
+      allow update: if signedIn()
+                    && resource.data.ownerId == request.auth.uid
+                    && request.resource.data.ownerId == request.auth.uid
+                    && request.resource.data.checklistId == resource.data.checklistId
+                    && request.resource.data.mode == resource.data.mode;
+
+      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+    }
+  }
+}

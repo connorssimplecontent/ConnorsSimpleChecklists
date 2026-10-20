@@ -1,0 +1,8 @@
+{
+  "appId": "com.connor.simplechecklists",
+  "appName": "Connor'sSimpleChecklists",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}
