@@ -1,18 +1,32 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowLeft, Pencil, Share2, RotateCcw, Trash2, LogOut, Eye, EyeOff, Plus, Users } from 'lucide-react';
+import { ArrowLeft, Pencil, Share2, RotateCcw, Trash2, LogOut, Eye, EyeOff, Plus, Users, CalendarPlus, CalendarDays, AlertTriangle } from 'lucide-react';
 import { visibleItems, groupBySection, progress, variantName, newId } from '../../utils/checklist';
 import { ProgressBar } from '../ui/Modal';
 import VersionToggle from './VersionToggle';
+import { DueBadge, ItemDateModal, ExportCalendarModal } from './DueDate';
+import { dueStatus, isValidDate, useNow, cleanDue } from '../../utils/dates';
 
 /** Interactive view of one checklist: switch versions, check items off, reset, quick-add. */
-export default function ChecklistView({ checklist, me, onBack, onEdit, onShare, onReset, onDelete, onLeave, onToggleItem, onVersionChange, onUpdate }) {
+export default function ChecklistView({ checklist, me, onBack, onEdit, onShare, onReset, onDelete, onLeave, onToggleItem, onVersionChange, onUpdate, notify }) {
   const [hideDone, setHideDone] = useState(false);
   const [newItem, setNewItem] = useState('');
+  const [newDue, setNewDue] = useState('');
+  const [dateFor, setDateFor] = useState(null); // item id whose date dialog is open
+  const [exporting, setExporting] = useState(false);
+  const now = useNow();
 
   const isOwner = !me || checklist.ownerId === me.uid;
   const p = progress(checklist);
   const items = useMemo(() => visibleItems(checklist), [checklist]);
   const groups = useMemo(() => groupBySection(hideDone ? items.filter(i => !i.done) : items), [items, hideDone]);
+  const dated = items.filter(i => isValidDate(i.due));
+  const overdueCount = items.filter(i => dueStatus(i, now) === 'overdue').length;
+  const dueTodayCount = items.filter(i => dueStatus(i, now) === 'today').length;
+  const dateItem = dateFor ? items.find(i => i.id === dateFor) : null;
+
+  const setItemDate = (itemId, due, dueTime) =>
+    onUpdate(checklist.id, { items: checklist.items.map(it => (it.id === itemId ? cleanDue({ ...it, due, dueTime }) : it)) });
+
   const memberNames = checklist.members.map(uid => (me && uid === me.uid ? 'You' : checklist.memberNames[uid] || 'Member'));
 
   const quickAdd = e => {
@@ -20,8 +34,10 @@ export default function ChecklistView({ checklist, me, onBack, onEdit, onShare, 
     const text = newItem.trim();
     if (!text) return;
     const versions = Object.fromEntries(checklist.variants.map(v => [v.id, { qty: null }]));
-    onUpdate(checklist.id, { items: [...checklist.items, { id: newId('i'), text: text.slice(0, 200), section: '', versions }] });
+    const item = cleanDue({ id: newId('i'), text: text.slice(0, 200), section: '', versions, due: newDue });
+    onUpdate(checklist.id, { items: [...checklist.items, item] });
     setNewItem('');
+    setNewDue('');
   };
 
   return (
@@ -77,7 +93,20 @@ export default function ChecklistView({ checklist, me, onBack, onEdit, onShare, 
           <button onClick={() => setHideDone(h => !h)} className="op-btn-secondary px-3 py-1.5 text-sm font-semibold inline-flex items-center gap-1.5" aria-pressed={hideDone}>
             {hideDone ? <Eye size={15} /> : <EyeOff size={15} />} {hideDone ? 'Show completed' : 'Hide completed'}
           </button>
+          {dated.length > 0 && (
+            <button onClick={() => setExporting(true)} className="op-btn-secondary px-3 py-1.5 text-sm font-semibold inline-flex items-center gap-1.5">
+              <CalendarPlus size={15} /> Export dated tasks
+            </button>
+          )}
         </div>
+
+        {(overdueCount > 0 || dueTodayCount > 0) && (
+          <p className="op-due-summary text-sm font-semibold inline-flex flex-wrap items-center gap-x-3 gap-y-1">
+            <AlertTriangle size={15} aria-hidden="true" />
+            {overdueCount > 0 && <span className="op-text-overdue">{overdueCount} overdue</span>}
+            {dueTodayCount > 0 && <span className="op-text-today">{dueTodayCount} due today</span>}
+          </p>
+        )}
       </div>
 
       {/* Items */}
@@ -94,37 +123,63 @@ export default function ChecklistView({ checklist, me, onBack, onEdit, onShare, 
             {group.section && <h3 className="op-section-label">{group.section}</h3>}
             <ul className="space-y-2">
               {group.items.map(item => (
-                <li key={item.id}>
-                  <label className={`op-item ${item.done ? 'is-done' : ''} flex items-center gap-3 px-3 py-2.5 cursor-pointer`}>
+                <li key={item.id} className={`op-item ${item.done ? 'is-done' : ''} ${dueStatus(item, now) ? `due-${dueStatus(item, now)}` : ''} flex items-center gap-2 pr-2`}>
+                  <label className="flex-1 min-w-0 flex flex-wrap items-center gap-x-3 gap-y-1 pl-3 py-2.5 cursor-pointer">
                     <input
                       type="checkbox"
                       className="op-check"
                       checked={item.done}
                       onChange={e => onToggleItem(checklist.id, item.id, e.target.checked)}
                     />
-                    <span className="op-item-text flex-1 font-medium">{item.text}</span>
+                    <span className="op-item-text flex-1 min-w-[8rem] font-medium">{item.text}</span>
                     {item.qty ? <span className="op-qty">×{item.qty}</span> : null}
                   </label>
+                  <button
+                    onClick={() => setDateFor(item.id)}
+                    className={isValidDate(item.due) ? 'op-due-btn' : 'op-date-add p-1.5'}
+                    aria-label={isValidDate(item.due) ? `Change date for ${item.text}, or add it to a calendar` : `Set a date for ${item.text}`}
+                    title={isValidDate(item.due) ? 'Change date / add to calendar' : 'Set a date'}
+                  >
+                    {isValidDate(item.due) ? <DueBadge item={item} now={now} /> : <CalendarDays size={16} />}
+                  </button>
                 </li>
               ))}
             </ul>
           </section>
         ))}
 
-        <form onSubmit={quickAdd} className="flex gap-2 pt-2">
+        <form onSubmit={quickAdd} className="flex flex-wrap sm:flex-nowrap gap-2 pt-2">
           <input
             value={newItem}
             onChange={e => setNewItem(e.target.value)}
             placeholder={checklist.variants.length > 1 ? 'Quick add an item (adds to every version)' : 'Quick add an item'}
-            className="flex-1 px-3 py-2 rounded border text-sm"
+            className="flex-1 basis-full sm:basis-0 min-w-0 px-3 py-2 rounded border text-sm"
             maxLength={200}
             aria-label="New item"
+          />
+          <input
+            type="date"
+            value={newDue}
+            onChange={e => setNewDue(e.target.value)}
+            className="flex-1 sm:flex-none sm:w-[9.5rem] px-2 py-2 rounded border text-sm"
+            aria-label="Date for new item (optional)"
+            title="Date (optional)"
           />
           <button type="submit" className="op-btn-primary px-3 py-2 text-sm font-bold inline-flex items-center gap-1" disabled={!newItem.trim()}>
             <Plus size={16} /> Add
           </button>
         </form>
       </div>
+
+      {dateItem && (
+        <ItemDateModal
+          item={dateItem}
+          checklist={checklist}
+          onSave={(due, dueTime) => setItemDate(dateItem.id, due, dueTime)}
+          onClose={() => setDateFor(null)}
+        />
+      )}
+      {exporting && <ExportCalendarModal checklist={checklist} notify={notify} onClose={() => setExporting(false)} />}
 
       <div className="flex justify-end">
         {isOwner ? (
