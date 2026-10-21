@@ -672,6 +672,53 @@ html[data-theme] body {
 [data-theme="manly"] .op-section-label { color: #dc2626; }
 
 /* ==========================================================================
+   Task dates: due chips, overdue / due-today highlighting
+   ========================================================================== */
+.op-due {
+  --due-color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--chip-radius);
+  white-space: nowrap;
+  color: var(--due-color);
+  background: var(--surface-2);
+  background: color-mix(in srgb, var(--due-color) 14%, transparent);
+  border: 1px solid var(--border-color);
+  border-color: color-mix(in srgb, var(--due-color) 45%, transparent);
+}
+.op-due.is-overdue { --due-color: var(--danger); }
+.op-due.is-today { --due-color: var(--warning); }
+.op-due.is-soon { --due-color: var(--accent); }
+.op-due.is-done { opacity: 0.75; }
+.op-text-overdue { color: var(--danger); }
+.op-text-today { color: var(--warning); }
+
+.op-item.due-overdue { border-color: var(--danger); box-shadow: inset 4px 0 0 var(--danger); }
+.op-item.due-today { box-shadow: inset 4px 0 0 var(--warning); }
+[data-theme] .op-item.due-overdue:hover { box-shadow: inset 4px 0 0 var(--danger); }
+[data-theme] .op-item.due-today:hover { box-shadow: inset 4px 0 0 var(--warning); }
+[data-theme="circus"] .op-item.due-overdue { border-color: var(--danger); }
+
+.op-due-btn { flex-shrink: 0; border-radius: var(--chip-radius); }
+.op-due-btn:hover .op-due { filter: brightness(1.1); border-style: solid; text-decoration: underline; }
+.op-date-add {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+.op-date-add:hover { opacity: 1; color: var(--accent); background: var(--surface-2); }
+[data-theme] input[type="date"], [data-theme] input[type="time"] { color-scheme: inherit; }
+
+/* ==========================================================================
    Accessibility: respect reduced-motion preferences
    ========================================================================== */
 @media (prefers-reduced-motion: reduce) {
