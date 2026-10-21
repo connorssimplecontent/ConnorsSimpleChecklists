@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowUp, ArrowDown, Trash2, Plus, X, Save, ListPlus } from 'lucide-react';
+import { ArrowUp, ArrowDown, Trash2, Plus, X, Save, ListPlus, CalendarDays } from 'lucide-react';
 import { newId, EMOJI_CHOICES } from '../../utils/checklist';
+import { cleanDue, isValidDate } from '../../utils/dates';
 
 /**
  * Build or edit a checklist: title, emoji, versions, and per-version items/quantities.
@@ -101,7 +102,7 @@ export default function ChecklistEditor({ checklist, onSave, onCancel }) {
     if (!cleanTitle) { setError('Give your checklist a name.'); return; }
     const cleanVariants = variants.map((v, i) => ({ ...v, name: v.name.trim() || `Version ${i + 1}` }));
     const cleanItems = items
-      .map(it => ({ ...it, text: it.text.trim(), section: (it.section || '').trim() }))
+      .map(it => cleanDue({ ...it, text: it.text.trim(), section: (it.section || '').trim() }))
       .filter(it => it.text);
     if (cleanItems.length > 500) { setError('A checklist can have up to 500 items.'); return; }
     const activeVariantId = cleanVariants.some(v => v.id === checklist.activeVariantId) ? checklist.activeVariantId : cleanVariants[0].id;
@@ -252,6 +253,34 @@ export default function ChecklistEditor({ checklist, onSave, onCancel }) {
                     </div>
                   );
                 })}
+              </div>
+              <div className="flex flex-wrap gap-2 items-center text-xs">
+                <span className="inline-flex items-center gap-1 font-semibold opacity-80"><CalendarDays size={14} /> Date</span>
+                <input
+                  type="date"
+                  value={item.due || ''}
+                  onChange={e => updateItem(item.id, e.target.value ? { due: e.target.value } : { due: undefined, dueTime: undefined })}
+                  className="px-1.5 py-1 rounded border text-xs"
+                  aria-label={`Date for ${item.text || 'item'}`}
+                />
+                <input
+                  type="time"
+                  value={item.dueTime || ''}
+                  onChange={e => updateItem(item.id, { dueTime: e.target.value || undefined })}
+                  disabled={!isValidDate(item.due)}
+                  className="px-1.5 py-1 rounded border text-xs disabled:opacity-40"
+                  aria-label={`Time for ${item.text || 'item'} (optional)`}
+                  title={isValidDate(item.due) ? 'Time (optional – leave empty for all day)' : 'Pick a date first'}
+                />
+                {item.due && (
+                  <button
+                    onClick={() => updateItem(item.id, { due: undefined, dueTime: undefined })}
+                    className="opacity-70 hover:opacity-100 inline-flex items-center gap-0.5 font-semibold"
+                    aria-label={`Clear date for ${item.text || 'item'}`}
+                  >
+                    <X size={13} /> Clear
+                  </button>
+                )}
               </div>
             </li>
           ))}
