@@ -2,6 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { Plus, KeyRound, Search, ListChecks } from 'lucide-react';
 import { progress } from '../../utils/checklist';
 import ChecklistCard from './ChecklistCard';
+import DuePanel from './DuePanel';
+import { useNow } from '../../utils/dates';
 
 const SORTS = {
   recent: (a, b) => b.updatedAt - a.updatedAt,
@@ -10,7 +12,8 @@ const SORTS = {
 };
 
 /** Top-level view of every checklist. */
-export default function Dashboard({ checklists, me, onOpen, onNew, onJoin, onReset, onVersionChange, banner }) {
+export default function Dashboard({ checklists, me, onOpen, onNew, onJoin, onReset, onVersionChange, onToggleItem, onUpdate, notify, banner }) {
+  const now = useNow();
   const [search, setSearch] = useState('');
   const [scope, setScope] = useState('all'); // all | mine | shared
   const [sort, setSort] = useState('recent');
@@ -50,6 +53,8 @@ export default function Dashboard({ checklists, me, onOpen, onNew, onJoin, onRes
         <Stat label="Completed lists" value={stats.complete} />
         <Stat label="Shared lists" value={stats.shared} />
       </div>
+
+      <DuePanel checklists={checklists} now={now} onOpen={onOpen} onToggleItem={onToggleItem} onUpdate={onUpdate} notify={notify} />
 
       {/* Toolbar */}
       <div className="op-card p-3 flex flex-col md:flex-row gap-3 md:items-center">
@@ -99,7 +104,7 @@ export default function Dashboard({ checklists, me, onOpen, onNew, onJoin, onRes
       {visible.length ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {visible.map(c => (
-            <ChecklistCard key={c.id} checklist={c} me={me} onOpen={onOpen} onReset={onReset} onVersionChange={onVersionChange} />
+            <ChecklistCard key={c.id} checklist={c} me={me} now={now} onOpen={onOpen} onReset={onReset} onVersionChange={onVersionChange} />
           ))}
         </div>
       ) : (
