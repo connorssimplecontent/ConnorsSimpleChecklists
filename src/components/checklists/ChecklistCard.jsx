@@ -1,13 +1,21 @@
 import React from 'react';
-import { RotateCcw, Users, Radio } from 'lucide-react';
+import { RotateCcw, Users, Radio, AlarmClock } from 'lucide-react';
 import { progress } from '../../utils/checklist';
 import { ProgressBar } from '../ui/Modal';
 import VersionToggle from './VersionToggle';
+import { visibleItems } from '../../utils/checklist';
+import { dueStatus } from '../../utils/dates';
 
-export default function ChecklistCard({ checklist, me, onOpen, onReset, onVersionChange }) {
+export default function ChecklistCard({ checklist, me, now, onOpen, onReset, onVersionChange }) {
   const p = progress(checklist);
   const isOwner = !me || checklist.ownerId === me.uid;
   const others = checklist.members.length - 1;
+  let overdue = 0, today = 0;
+  for (const it of visibleItems(checklist)) {
+    const s = dueStatus(it, now);
+    if (s === 'overdue') overdue += 1;
+    else if (s === 'today') today += 1;
+  }
 
   return (
     <div
@@ -32,6 +40,12 @@ export default function ChecklistCard({ checklist, me, onOpen, onReset, onVersio
               <span className="op-badge op-chip px-2 py-0.5 inline-flex items-center gap-1">
                 <Users size={11} /> Shared with {others}
               </span>
+            )}
+            {overdue > 0 && (
+              <span className="op-due is-overdue"><AlarmClock size={11} /> {overdue} overdue</span>
+            )}
+            {today > 0 && (
+              <span className="op-due is-today"><AlarmClock size={11} /> {today} due today</span>
             )}
             {isOwner && checklist.liveCode && (
               <span className="op-badge op-chip px-2 py-0.5 inline-flex items-center gap-1">
