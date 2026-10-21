@@ -265,6 +265,7 @@ export default function App() {
         onToggleItem={handleToggle}
         onVersionChange={handleVersion}
         onUpdate={handleUpdate}
+        notify={setToast}
       />
     );
   } else {
@@ -277,6 +278,9 @@ export default function App() {
         onJoin={() => setModal({ type: 'join', code: '' })}
         onReset={requestReset}
         onVersionChange={handleVersion}
+        onToggleItem={handleToggle}
+        onUpdate={handleUpdate}
+        notify={setToast}
         banner={importBanner}
       />
     );
